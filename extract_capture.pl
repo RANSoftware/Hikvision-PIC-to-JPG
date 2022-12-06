@@ -58,7 +58,7 @@ for ($i=1; $i<$datadirNumber; $i++) {
 		
 		sleep(2);
 
-		my $driver   = "SQLite"; 
+		my $driver = "SQLite"; 
 		my $database = $inputDir . "/event_db_index01";
 		my $dsn = "DBI:$driver:dbname=$database";
 		my $userid = "";
