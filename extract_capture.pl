@@ -3,6 +3,7 @@
 use Date::Format;
 use File::Find::Rule;
 use DBI;
+#use Data::Dumper qw(Dumper);
 
 my ($mainInputDir, $outputDir) = @ARGV;
 
@@ -55,7 +56,8 @@ for ($i=1; $i<$datadirNumber; $i++) {
 	print "Processing folder: $inputDir\n";
 
 	if (-e $inputDir."/event_db_index01") {
-		
+		my $ary1;
+		my $TBNumber;
 		sleep(2);
 
 		my $driver = "SQLite"; 
@@ -64,119 +66,267 @@ for ($i=1; $i<$datadirNumber; $i++) {
 		my $userid = "";
 		my $password = "";
 		my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) or die $DBI::errstr;
-		my $stmt = qq(SELECT id, event_table_name from event_id;);
-		my $sth = $dbh->prepare($stmt);
-		my $rv = $sth->execute() or die $DBI::errstr;
-		if($rv < 0) {
-		   print $DBI::errstr;
+		
+		my $sth = $dbh->table_info('','main','%', 'TABLE');
+		my $tables = [map{$_->[2]} @{$sth->fetchall_arrayref()}];
+		#print join("\n", @$tables);
+		
+		if ( grep( /^event_id$/, @$tables ) ) {
+			print "\n\n***** event_id found *****\n";
+			my $stmt = qq(SELECT id, event_table_name from event_id;);
+			my $sth = $dbh->prepare($stmt);
+			my $rv = $sth->execute() or die $DBI::errstr;
+				if($rv < 0) {
+					print $DBI::errstr;
+				}
+			$ary1 = $sth->fetchall_arrayref({});
+			#print Dumper(\$ary1);		
 		}
-		$ary1 = $sth->fetchall_arrayref({});
-
-		my $TBNumber = $#$ary1 + 1;
-		print "Number of tables in database: $TBNumber\n";
+		
+		else {
+			$ary1 = [
+				{
+				  'id' => 10,
+				  'event_table_name' => 'MotionDetectTB'
+				},
+				{
+				  'id' => 12,
+				  'event_table_name' => 'AlarmInputTB'
+				},
+				{
+				  'id' => 13,
+				  'event_table_name' => 'SceneChangeTB'
+				},
+				{
+				  'id' => 24,
+				  'event_table_name' => 'NormalPirTB'
+				},
+				{
+				  'id' => 194,
+				  'event_table_name' => 'faceSnapDB'
+				},
+				{
+				  'id' => 204,
+				  'event_table_name' => 'intrusionDB'
+				},
+				{
+				  'id' => 205,
+				  'event_table_name' => 'lineCrossDB'
+				},
+				{
+				  'id' => 206,
+				  'event_table_name' => 'regionEnterDB'
+				},
+				{
+				  'id' => 207,
+				  'event_table_name' => 'regionExitDB'
+				},
+				{
+				  'id' => 208,
+				  'event_table_name' => 'loiteringDB'
+				},
+				{
+				  'id' => 209,
+				  'event_table_name' => 'peopleGatherDB'
+				},
+				{
+				  'id' => 210,
+				  'event_table_name' => 'fastMoveDB'
+				},
+				{
+				  'id' => 211,
+				  'event_table_name' => 'ParkingDB'
+				},
+				{
+				  'id' => 212,
+				  'event_table_name' => 'objectLeaveDB'
+				},
+				{
+				  'id' => 213,
+				  'event_table_name' => 'objectRemoveDB'
+				},
+				{
+				  'id' => 234,
+				  'event_table_name' => 'MdWithTargetDB'
+				},
+				{
+				  #---------- Extract first picture only ----------
+				  'id' => 241,
+				  'event_table_name' => 'FaceDetectTB'
+				},
+				{
+				  'id' => 449,
+				  'event_table_name' => 'IntrusionCaptureTable'
+				},
+				{
+				  'id' => 450,
+				  'event_table_name' => 'LineCrossCaptureTable'
+				},
+				{
+				  'id' => 451,
+				  'event_table_name' => 'RegionEnterCaptureTable'
+				},
+				{
+				  'id' => 452,
+				  'event_table_name' => 'RegionExitCaptureTable'
+				},
+				{
+				  'id' => 453,
+				  'event_table_name' => 'LoiteringCaptureTable'
+				},
+				{
+				  'id' => 454,
+				  'event_table_name' => 'PeopleGatherCaptureTable'
+				},
+				{
+				  'id' => 455,
+				  'event_table_name' => 'FastMoveCaptureTable'
+				},
+				{
+				  'id' => 456,
+				  'event_table_name' => 'ParkingCaptureTable'
+				},
+				{
+				  'id' => 457,
+				  'event_table_name' => 'ObjectLeaveCaptureTable'
+				},
+				{
+				  'id' => 458,
+				  'event_table_name' => 'ObjectRemoveCaptureTable'
+				},
+				{
+				  'id' => 460,
+				  'event_table_name' => 'TimingCaptureTB'
+				},
+				#------------------- Unknown id -------------------
+				{
+				  'id' => 1000,
+				  'event_table_name' => 'ManualCaptureTB'
+				},
+				{
+				  'id' => 1001,
+				  'event_table_name' => 'MdWithTargetCaptureTable'
+				},
+				{
+				  #---------- Extract first picture only ----------
+				  'id' => 1002,
+				  'event_table_name' => 'mixedTrafficDetectTB'
+				}
+			];
+		}
+		
+		$TBNumber = $#$ary1 + 1;
+		print "\nNumber of tables in database: $TBNumber\n";
 		sleep(1);
+		my $tableName;
 		for ($j=0; $j<$TBNumber; $j++) {
-			my $tableName = $ary1->[$j]{'event_table_name'};
-			print "Processing table: $tableName: ";
-			my $stmt = "SELECT id, trigger_time, file_no, pic_offset_0, pic_len_0 from ".$tableName;
-			my $sth = $dbh->prepare($stmt) or die $DBI::errstr;
-			my $rv = $sth->execute();
-			
-			if($rv < 0) {
-			   print $DBI::errstr;
-			}
-			$ary = $sth->fetchall_arrayref({});
+			$tableName = $ary1->[$j]{'event_table_name'};
+			if ( grep( /^$tableName$/, @$tables ) ) {
+				print "\n***** $tableName found *****\n";
+				print "Processing table: $tableName: ";
+				my $stmt = "SELECT id, trigger_time, file_no, pic_offset_0, pic_len_0 from ".$tableName;
+				my $sth = $dbh->prepare($stmt) or die $DBI::errstr;
+				my $rv = $sth->execute();
+				
+				if($rv < 0) {
+				   print $DBI::errstr;
+				}
+				$ary = $sth->fetchall_arrayref({});
 
-			my $TBLength = $#$ary + 1;
-			print "$TBLength\n";
-			sleep(1);
-			
-			for ($k=0; $k<$TBLength; $k++) {
-				$fileNumber = $ary->[$k]{'file_no'};
-				$picFileName = "hiv" . sprintf("%05d", $fileNumber) . ".pic";
-				open (PF, $inputDir . "/" . $picFileName) or die "ERROR: Can't find " .$picFileName. " in the input folder.\n";
-				binmode(PF);
-				$capDate = $ary->[$k]{'trigger_time'};
-				$startOffset = $ary->[$k]{'pic_offset_0'};
-				$endOffset = $startOffset + ($ary->[$k]{'pic_len_0'});
-				$formatted_start_time = time2str("%C", $capDate, -0005);
-				if ($outputDateFormat == 1) {
-					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%a", $capDate, -0005);
-				}
-				elsif ($outputDateFormat == 2) {
-					$fileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%w", $capDate, -0005);
-				}
-				else {
-					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%a", $capDate, -0005);
-				}
-				$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
-								
-				if ($inputStartDate != "" and $inputEndDate != "") {
-					if ($capDate > 0 and $limitFileDate >= $inputStartDate and $limitFileDate <= $inputEndDate) {
-						$jpegLength = ($endOffset - $startOffset);
-						$fileSize = $jpegLength / 1024;
-						$fileName = "Image_${fileDate}-${fileDayofWeek}.jpg";
-						if ($timeDuplicates != 2) {
-							my $picNumber = 1;
-							START:
-								if (-e $outputDir."/".$fileName) {
-								print "File Exists! Renaming...\n";
-								$fileName = "Image_${fileDate}-${fileDayofWeek}-". sprintf("%03d", $picNumber) .".jpg";
-								$picNumber++;
-								goto START;
+				my $TBLength = $#$ary + 1;
+				print "$TBLength\n";
+				sleep(1);
+				
+				for ($k=0; $k<$TBLength; $k++) {
+					$fileNumber = $ary->[$k]{'file_no'};
+					$picFileName = "hiv" . sprintf("%05d", $fileNumber) . ".pic";
+					open (PF, $inputDir . "/" . $picFileName) or die "ERROR: Can't find " .$picFileName. " in the input folder.\n";
+					binmode(PF);
+					$capDate = $ary->[$k]{'trigger_time'};
+					$startOffset = $ary->[$k]{'pic_offset_0'};
+					$endOffset = $startOffset + ($ary->[$k]{'pic_len_0'});
+					$formatted_start_time = time2str("%C", $capDate, -0005);
+					if ($outputDateFormat == 1) {
+						$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
+						$fileDayofWeek = time2str("%a", $capDate, -0005);
+					}
+					elsif ($outputDateFormat == 2) {
+						$fileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
+						$fileDayofWeek = time2str("%w", $capDate, -0005);
+					}
+					else {
+						$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
+						$fileDayofWeek = time2str("%a", $capDate, -0005);
+					}
+					$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
+									
+					if ($inputStartDate != "" and $inputEndDate != "") {
+						if ($capDate > 0 and $limitFileDate >= $inputStartDate and $limitFileDate <= $inputEndDate) {
+							$jpegLength = ($endOffset - $startOffset);
+							$fileSize = $jpegLength / 1024;
+							$fileName = "Image_${fileDate}-${fileDayofWeek}.jpg";
+							if ($timeDuplicates != 2) {
+								my $picNumber = 1;
+								START:
+									if (-e $outputDir."/".$fileName) {
+									print "File Exists! Renaming...\n";
+									$fileName = "Image_${fileDate}-${fileDayofWeek}-". sprintf("%03d", $picNumber) .".jpg";
+									$picNumber++;
+									goto START;
+									}
+							}
+							unless (-e $outputDir."/".$fileName) {
+								if ($jpegLength > 0) {
+									seek (PF, $startOffset, 0);
+									read (PF, $singlejpeg, $jpegLength);
+									print "PicFile: $picFileName\n";
+									if ($singlejpeg =~ /[^\0]/) {
+										print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
+										open (OUTFILE, ">". $outputDir."/".$fileName);
+										binmode(OUTFILE);
+										print OUTFILE ${singlejpeg};
+										close OUTFILE;
+									}
 								}
+							}
 						}
-						unless (-e $outputDir."/".$fileName) {
-							if ($jpegLength > 0) {
-								seek (PF, $startOffset, 0);
-								read (PF, $singlejpeg, $jpegLength);
-								print "PicFile: $picFileName\n";
-								if ($singlejpeg =~ /[^\0]/) {
-									print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
-									open (OUTFILE, ">". $outputDir."/".$fileName);
-									binmode(OUTFILE);
-									print OUTFILE ${singlejpeg};
-									close OUTFILE;
+					} 
+					else {
+						if ($capDate > 0) {
+							$jpegLength = ($endOffset - $startOffset);
+							$fileSize = $jpegLength / 1024;
+							$fileName = "Image_${fileDate}-${fileDayofWeek}.jpg";
+							if ($timeDuplicates != 2) {
+								my $picNumber = 1;
+								START:
+									if (-e $outputDir."/".$fileName) {
+									print "File Exists! Renaming...\n";
+									$fileName = "Image_${fileDate}-${fileDayofWeek}-". sprintf("%03d", $picNumber) .".jpg";
+									$picNumber++;
+									goto START;
+									}
+							}
+							unless (-e $outputDir."/".$fileName) {
+								if ($jpegLength > 0) {
+									seek (PF, $startOffset, 0);
+									read (PF, $singlejpeg, $jpegLength);
+									print "PicFile: $picFileName\n";
+									if ($singlejpeg =~ /[^\0]/) {
+										print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
+										open (OUTFILE, ">". $outputDir."/".$fileName);
+										binmode(OUTFILE);
+										print OUTFILE ${singlejpeg};
+										close OUTFILE;
+									}
 								}
 							}
 						}
 					}
-				} 
-				else {
-					if ($capDate > 0) {
-						$jpegLength = ($endOffset - $startOffset);
-						$fileSize = $jpegLength / 1024;
-						$fileName = "Image_${fileDate}-${fileDayofWeek}.jpg";
-						if ($timeDuplicates != 2) {
-							my $picNumber = 1;
-							START:
-								if (-e $outputDir."/".$fileName) {
-								print "File Exists! Renaming...\n";
-								$fileName = "Image_${fileDate}-${fileDayofWeek}-". sprintf("%03d", $picNumber) .".jpg";
-								$picNumber++;
-								goto START;
-								}
-						}
-						unless (-e $outputDir."/".$fileName) {
-							if ($jpegLength > 0) {
-								seek (PF, $startOffset, 0);
-								read (PF, $singlejpeg, $jpegLength);
-								print "PicFile: $picFileName\n";
-								if ($singlejpeg =~ /[^\0]/) {
-									print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
-									open (OUTFILE, ">". $outputDir."/".$fileName);
-									binmode(OUTFILE);
-									print OUTFILE ${singlejpeg};
-									close OUTFILE;
-								}
-							}
-						}
-					}
+					close (PF);
 				}
-				close (PF);
+			}
+			else {
+				print "\nCan't find table: $tableName\n";
 			}
 		}
 		$dbh->disconnect();
