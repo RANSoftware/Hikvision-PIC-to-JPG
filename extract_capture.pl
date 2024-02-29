@@ -15,9 +15,14 @@ if (not defined $outputDir) {
   die "\nERROR: Need output directory.\nUsage: extract_capture.pl inputdir outputdir\n";
 }
 
+my $useMainInputDir = 0;
+
 unless ((-e $mainInputDir."/datadir0/event_db_index01") or (-e $mainInputDir."/datadir0/index00p.bin") or (-e $mainInputDir."/datadir0/index01p.bin")) {
-		die "\nERROR: Can't find event_db_index01 or index00p.bin or index01p.bin in $mainInputDir\\datadir0\n";
+	$useMainInputDir = 1;
+	unless ((-e $mainInputDir."/event_db_index01") or (-e $mainInputDir."/index00p.bin") or (-e $mainInputDir."/index01p.bin")) {
+		die "\nERROR: Can't find event_db_index01 or index00p.bin or index01p.bin in $mainInputDir\\datadir0\ or $mainInputDir\n";
 	}
+}
 
 print "\n************* EXTRACTION DATE AND TIME LIMITS *************\n";
 print "\nDate and time format example YYYYMMDDHHMMSS: 20181225221508\n";
@@ -49,10 +54,23 @@ my $timeDuplicates = <STDIN>;
 chomp $timeDuplicates;
 
 my @datadirArray = File::Find::Rule->directory->in($mainInputDir);
-my $datadirNumber = @datadirArray;   
+@datadirArray = sort @datadirArray;
+if ($useMainInputDir == 0) {
+	@datadirArray = @datadirArray[ 1 .. $#datadirArray ];
+}
+my $datadirNumber = @datadirArray;
 
-for ($i=1; $i<$datadirNumber; $i++) {
-	my $inputDir = $datadirArray[$i];
+if ($useMainInputDir == 1) {
+	print "The input directory you have specified doesn't contain datadir folders,\nbut will be processed since it contains index files.\nThe input directory should be the directory that contains the datadir folders.\n\n";
+}
+
+print "Number of found datadirs: ", $datadirNumber, "\n";
+for ($i=0; $i<$datadirNumber; $i++) {
+		print $datadirArray[$i], "\n\n"
+}
+
+for ($i=0; $i<$datadirNumber; $i++) {
+    my $inputDir = $datadirArray[$i];
 	print "Processing folder: $inputDir\n";
 
 	if (-e $inputDir."/event_db_index01") {
