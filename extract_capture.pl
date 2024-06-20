@@ -19,7 +19,7 @@ my $useMainInputDir = 0;
 
 unless ((-e $mainInputDir."/datadir0/event_db_index01") or (-e $mainInputDir."/datadir0/pic_segment_db_index00000") or (-e $mainInputDir."/datadir0/index00p.bin") or (-e $mainInputDir."/datadir0/index01p.bin")) {
 	$useMainInputDir = 1;
-	unless ((-e $mainInputDir."/event_db_index01") or (-e $mainInputDir."/datadir0/pic_segment_db_index00000") or (-e $mainInputDir."/index00p.bin") or (-e $mainInputDir."/index01p.bin")) {
+	unless ((-e $mainInputDir."/event_db_index01") or (-e $mainInputDir."/pic_segment_db_index00000") or (-e $mainInputDir."/index00p.bin") or (-e $mainInputDir."/index01p.bin")) {
 		die "\nERROR: Can't find event_db_index01 or pic_segment_db_index00000 or index00p.bin or index01p.bin in $mainInputDir\\datadir0\ or $mainInputDir\n";
 	}
 }
