@@ -17,10 +17,10 @@ if (not defined $outputDir) {
 
 my $useMainInputDir = 0;
 
-unless ((-e $mainInputDir."/datadir0/event_db_index01") or (-e $mainInputDir."/datadir0/index00p.bin") or (-e $mainInputDir."/datadir0/index01p.bin")) {
+unless ((-e $mainInputDir."/datadir0/event_db_index01") or (-e $mainInputDir."/datadir0/pic_segment_db_index00000") or (-e $mainInputDir."/datadir0/index00p.bin") or (-e $mainInputDir."/datadir0/index01p.bin")) {
 	$useMainInputDir = 1;
-	unless ((-e $mainInputDir."/event_db_index01") or (-e $mainInputDir."/index00p.bin") or (-e $mainInputDir."/index01p.bin")) {
-		die "\nERROR: Can't find event_db_index01 or index00p.bin or index01p.bin in $mainInputDir\\datadir0\ or $mainInputDir\n";
+	unless ((-e $mainInputDir."/event_db_index01") or (-e $mainInputDir."/datadir0/pic_segment_db_index00000") or (-e $mainInputDir."/index00p.bin") or (-e $mainInputDir."/index01p.bin")) {
+		die "\nERROR: Can't find event_db_index01 or pic_segment_db_index00000 or index00p.bin or index01p.bin in $mainInputDir\\datadir0\ or $mainInputDir\n";
 	}
 }
 
@@ -70,7 +70,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 }
 
 for ($i=0; $i<$datadirNumber; $i++) {
-    my $inputDir = $datadirArray[$i];
+	my $inputDir = $datadirArray[$i];
 	print "Processing folder: $inputDir\n";
 
 	if (-e $inputDir."/event_db_index01") {
@@ -384,6 +384,136 @@ for ($i=0; $i<$datadirNumber; $i++) {
 		$dbh->disconnect();
 		print "Operation done for folder: $inputDir\n";
 	}
+
+	elsif (-e $inputDir."/pic_segment_db_index00000") {
+		our $pic_segment_index = 0;
+		while (1) {
+			my $pic_segment_filename = sprintf("pic_segment_db_index%05d", $pic_segment_index);
+			my $pic_segment_filepath = $inputDir . "/" . $pic_segment_filename;
+			
+			if (-e $pic_segment_filepath) {
+				perform_extraction($pic_segment_filepath);
+			}   
+			else {
+				last;
+			}
+			$pic_segment_index++;
+		}
+
+		sub perform_extraction {
+			my $driver = "SQLite"; 
+			my ($database) = @_;
+			print "Processing: $database\n\n";
+			my $dsn = "DBI:$driver:dbname=$database";
+			my $userid = "";
+			my $password = "";
+			my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) or die $DBI::errstr;
+			my $stmt = "SELECT start_time, start_offset, end_offset from "."pic_segment_idx_tb";
+			my $sth = $dbh->prepare($stmt) or die $DBI::errstr;
+			my $rv = $sth->execute();
+			
+			if($rv < 0) {
+				print $DBI::errstr;
+			}
+			$ary = $sth->fetchall_arrayref({});
+
+			my $TBLength = $#$ary + 1;
+			#print "$TBLength\n";
+			#sleep(2);
+			
+			for ($k=0; $k<$TBLength; $k++) {
+				$picFileName = "hiv" . sprintf("%05d", $pic_segment_index) . ".pic";
+				#print "$picFileName\n";
+				#sleep(2);
+				open (PF, $inputDir . "/" . $picFileName) or die "ERROR: Can't find " .$picFileName. " in the input folder.\n";
+				binmode(PF);
+				$capDate = $ary->[$k]{'start_time'};
+				$startOffset = $ary->[$k]{'start_offset'};
+				$endOffset = $ary->[$k]{'end_offset'};
+				$formatted_start_time = time2str("%C", $capDate, -0005);
+				if ($outputDateFormat == 1) {
+					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
+					$fileDayofWeek = time2str("%a", $capDate, -0005);
+				}
+				elsif ($outputDateFormat == 2) {
+					$fileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
+					$fileDayofWeek = time2str("%w", $capDate, -0005);
+				}
+				else {
+					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
+					$fileDayofWeek = time2str("%a", $capDate, -0005);
+				}
+				$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
+								
+				if ($inputStartDate != "" and $inputEndDate != "") {
+					if ($capDate > 0 and $limitFileDate >= $inputStartDate and $limitFileDate <= $inputEndDate) {
+						$jpegLength = ($endOffset - $startOffset);
+						$fileSize = $jpegLength / 1024;
+						$fileName = "Image_${fileDate}-${fileDayofWeek}.jpg";
+						if ($timeDuplicates != 2) {
+							my $picNumber = 1;
+							START:
+								if (-e $outputDir."/".$fileName) {
+								print "File Exists! Renaming...\n";
+								$fileName = "Image_${fileDate}-${fileDayofWeek}-". sprintf("%03d", $picNumber) .".jpg";
+								$picNumber++;
+								goto START;
+								}
+						}
+						unless (-e $outputDir."/".$fileName) {
+							if ($jpegLength > 0) {
+								seek (PF, $startOffset, 0);
+								read (PF, $singlejpeg, $jpegLength);
+								print "PicFile: $picFileName\n";
+								if ($singlejpeg =~ /[^\0]/) {
+									print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
+									open (OUTFILE, ">". $outputDir."/".$fileName);
+									binmode(OUTFILE);
+									print OUTFILE ${singlejpeg};
+									close OUTFILE;
+								}
+							}
+						}
+					}
+				} 
+				else {
+					if ($capDate > 0) {
+						$jpegLength = ($endOffset - $startOffset);
+						$fileSize = $jpegLength / 1024;
+						$fileName = "Image_${fileDate}-${fileDayofWeek}.jpg";
+						if ($timeDuplicates != 2) {
+							my $picNumber = 1;
+							START:
+								if (-e $outputDir."/".$fileName) {
+								print "File Exists! Renaming...\n";
+								$fileName = "Image_${fileDate}-${fileDayofWeek}-". sprintf("%03d", $picNumber) .".jpg";
+								$picNumber++;
+								goto START;
+								}
+						}
+						unless (-e $outputDir."/".$fileName) {
+							if ($jpegLength > 0) {
+								seek (PF, $startOffset, 0);
+								read (PF, $singlejpeg, $jpegLength);
+								print "PicFile: $picFileName\n";
+								if ($singlejpeg =~ /[^\0]/) {
+									print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
+									open (OUTFILE, ">". $outputDir."/".$fileName);
+									binmode(OUTFILE);
+									print OUTFILE ${singlejpeg};
+									close OUTFILE;
+								}
+							}
+						}
+					}
+				}
+				close (PF);
+			}
+			$dbh->disconnect();
+		}
+	print "Operation done for folder: $inputDir\n";
+	}
+
 	elsif ((-e $inputDir."/index00p.bin") or (-e $inputDir."/index01p.bin")) {	
 				
 		$maxRecords = 4096;
@@ -525,7 +655,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 		close FH;
 	}
 	else {	
-		die "\nERROR: Can't find event_db_index01 or index00p.bin or index01p.bin in $inputDir\n";
+		die "\nERROR: Can't find event_db_index01 or pic_segment_db_index00000 or index00p.bin or index01p.bin in $inputDir\n";
 	}
 }
 print "\nAll operations completed.\n";
