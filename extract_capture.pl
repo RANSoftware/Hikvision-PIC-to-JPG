@@ -1,9 +1,10 @@
 #!/usr/bin/perl -
 
 use Date::Format;
-use File::Find::Rule;
+use File::Spec;
 use DBI;
-#use Data::Dumper qw(Dumper);
+
+my $client_tz = "+0000";
 
 my ($mainInputDir, $outputDir) = @ARGV;
 
@@ -11,18 +12,26 @@ if (not defined $mainInputDir) {
   die "\nERROR: Need input directory.\nThe input directory should be the directory that contains the datadir folders.\nUsage: extract_capture.pl inputdir outputdir\n";
 }
 
+$mainInputDir = File::Spec->canonpath($mainInputDir);
+
 if (not defined $outputDir) {
   die "\nERROR: Need output directory.\nUsage: extract_capture.pl inputdir outputdir\n";
 }
 
 my $useMainInputDir = 0;
 
-unless ((-e $mainInputDir."/datadir0/event_db_index01") or (-e $mainInputDir."/datadir0/pic_segment_db_index00000") or (-e $mainInputDir."/datadir0/index00p.bin") or (-e $mainInputDir."/datadir0/index01p.bin")) {
-	$useMainInputDir = 1;
-	unless ((-e $mainInputDir."/event_db_index01") or (-e $mainInputDir."/pic_segment_db_index00000") or (-e $mainInputDir."/index00p.bin") or (-e $mainInputDir."/index01p.bin")) {
-		die "\nERROR: Can't find event_db_index01 or pic_segment_db_index00000 or index00p.bin or index01p.bin in $mainInputDir\\datadir0\ or $mainInputDir\n";
-	}
-}
+unless ((-e File::Spec->catfile($mainInputDir, "datadir0", "event_db_index01")) or 
+        (-e File::Spec->catfile($mainInputDir, "datadir0", "pic_segment_db_index00000")) or 
+        (-e File::Spec->catfile($mainInputDir, "datadir0", "index00p.bin")) or 
+        (-e File::Spec->catfile($mainInputDir, "datadir0", "index01p.bin"))) {
+		$useMainInputDir = 1;
+		unless ((-e File::Spec->catfile($mainInputDir, "event_db_index01")) or 
+				(-e File::Spec->catfile($mainInputDir, "pic_segment_db_index00000")) or 
+				(-e File::Spec->catfile($mainInputDir, "index00p.bin")) or 
+				(-e File::Spec->catfile($mainInputDir, "index01p.bin"))) {
+					die "\nERROR: Can't find event_db_index01 or pic_segment_db_index00000 or index00p.bin or index01p.bin in $mainInputDir\\datadir0\ or $mainInputDir\n";
+				}
+		}
 
 print "\n************* EXTRACTION DATE AND TIME LIMITS *************\n";
 print "\nDate and time format example YYYYMMDDHHMMSS: 20181225221508\n";
@@ -30,13 +39,15 @@ print "\nEnter START date and time (or enter 1 to start from the\nfirst availabl
 my $inputStartDate = <STDIN>;
 chomp $inputStartDate;
 
-$nowEndDate = time2str("%Y%m%d%H%M%S", time());
+my $nowEndDate = time2str("%Y%m%d%H%M%S", time());
 
-if ($inputStartDate != "") {
+my $inputEndDate = "";
+
+if ($inputStartDate ne "") {
 	print "\nEnter END date and time (or enter 1 to use current date and\ntime (this will extract until the last image), or leave empty\nif you don't want to use a date and time limit): ";
-	our $inputEndDate = <STDIN>;
+	$inputEndDate = <STDIN>;
 	chomp $inputEndDate;
-	if ($inputEndDate == 1) {
+	if ($inputEndDate eq "1") {
 		$inputEndDate = $nowEndDate;
 	}
 }
@@ -53,24 +64,43 @@ print "\nEnter 2 to only save the first picture\n";
 my $timeDuplicates = <STDIN>;
 chomp $timeDuplicates;
 
-my @datadirArray = File::Find::Rule->directory->in($mainInputDir);
-@datadirArray = sort @datadirArray;
-if ($useMainInputDir == 0) {
-	@datadirArray = @datadirArray[ 1 .. $#datadirArray ];
-}
-my $datadirNumber = @datadirArray;
+opendir(my $dh, $mainInputDir) or die "ERROR: Cannot open directory $mainInputDir: $!";
 
-if ($useMainInputDir == 1) {
-	print "The input directory you have specified doesn't contain datadir folders,\nbut will be processed since it contains index files.\nThe input directory should be the directory that contains the datadir folders.\n\n";
-}
+my @datadirArray = grep { -d File::Spec->catdir($mainInputDir, $_) && /datadir\d+/ } readdir($dh);
+
+closedir($dh);
+
+@datadirArray = map { 
+    my $full = File::Spec->catdir($mainInputDir, $_); 
+    $full =~ s{\\}{/}g; 
+    $full 
+} @datadirArray;
+
+@datadirArray = sort {
+    my ($num_a) = $a =~ /datadir(\d+)/;
+    my ($num_b) = $b =~ /datadir(\d+)/;
+    $num_a <=> $num_b
+} @datadirArray;
+
+my $datadirNumber = scalar @datadirArray;
 
 print "Number of found datadirs: ", $datadirNumber, "\n";
+
+if ($useMainInputDir == 1) {
+	print "\nThe input directory you have specified doesn't contain datadir folders,\nbut will be processed since it contains index files.\nThe input directory should be the directory that contains the datadir folders.\n\n";
+	$datadirNumber = 1;
+	sleep(8);
+}
+
 for ($i=0; $i<$datadirNumber; $i++) {
 		print $datadirArray[$i], "\n\n"
 }
 
 for ($i=0; $i<$datadirNumber; $i++) {
 	my $inputDir = $datadirArray[$i];
+	if ($useMainInputDir == 1) {
+		$inputDir = $mainInputDir;
+	}
 	print "Processing folder: $inputDir\n";
 
 	if (-e $inputDir."/event_db_index01") {
@@ -78,17 +108,17 @@ for ($i=0; $i<$datadirNumber; $i++) {
 		my $TBNumber;
 		sleep(2);
 
-		my $driver = "SQLite"; 
+		my $driver = "SQLite";
 		my $database = $inputDir . "/event_db_index01";
 		my $dsn = "DBI:$driver:dbname=$database";
 		my $userid = "";
 		my $password = "";
 		my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) or die $DBI::errstr;
-		
+
 		my $sth = $dbh->table_info('','main','%', 'TABLE');
 		my $tables = [map{$_->[2]} @{$sth->fetchall_arrayref()}];
 		#print join("\n", @$tables);
-		
+
 		if ( grep( /^event_id$/, @$tables ) ) {
 			print "\n\n***** event_id found *****\n";
 			my $stmt = qq(SELECT id, event_table_name from event_id;);
@@ -98,9 +128,9 @@ for ($i=0; $i<$datadirNumber; $i++) {
 					print $DBI::errstr;
 				}
 			$ary1 = $sth->fetchall_arrayref({});
-			#print Dumper(\$ary1);		
+			#print Dumper(\$ary1);
 		}
-		
+
 		else {
 			print "\nCan't find event_id, using the predefined detection tables.",
 			"\nThis method may produce fewer images than your .pic files actually contain.",
@@ -110,6 +140,10 @@ for ($i=0; $i<$datadirNumber; $i++) {
 			"\nThe script will resume in 10 seconds.\n";
 			sleep(10);
 			$ary1 = [
+				{
+				  'id' => 3,
+				  'event_table_name' => 'VibrationDetectionTable'
+				},
 				{
 				  'id' => 9,
 				  'event_table_name' => 'MoveDetectionDB'
@@ -141,6 +175,14 @@ for ($i=0; $i<$datadirNumber; $i++) {
 				{
 				  'id' => 194,
 				  'event_table_name' => 'faceSnapDB'
+				},
+				{
+				  'id' => 201,
+				  'event_table_name' => 'queueNumTable'
+				},
+				{
+				  'id' => 202,
+				  'event_table_name' => 'queueTimeTable'
 				},
 				{
 				  'id' => 204,
@@ -183,6 +225,14 @@ for ($i=0; $i<$datadirNumber; $i++) {
 				  'event_table_name' => 'objectRemoveDB'
 				},
 				{
+				  'id' => 214,
+				  'event_table_name' => 'LeavePositionDB'
+				},
+				{
+				  'id' => 215,
+				  'event_table_name' => 'PersonDensityDB'
+				},
+				{
 				  'id' => 234,
 				  'event_table_name' => 'MdWithTargetDB'
 				},
@@ -199,6 +249,18 @@ for ($i=0; $i<$datadirNumber; $i++) {
 				{
 				  'id' => 280,
 				  'event_table_name' => 'SceneChangeDetectionDB'
+				},
+				{
+				  'id' => 286,
+				  'event_table_name' => 'MoveDetectionResumeDB'
+				},
+				{
+				  'id' => 317,
+				  'event_table_name' => 'PlayCellphoneDB'
+				},
+				{
+				  'id' => 319,
+				  'event_table_name' => 'intelligentLightTable'
 				},
 				{
 				  'id' => 449,
@@ -244,6 +306,10 @@ for ($i=0; $i<$datadirNumber; $i++) {
 				  'id' => 460,
 				  'event_table_name' => 'TimingCaptureTB'
 				},
+				{
+				  'id' => 479,
+				  'event_table_name' => 'UsrDefinedEvent'
+				},
 				#------------------- Unknown id -------------------
 				{
 				  'id' => 1000,
@@ -260,21 +326,21 @@ for ($i=0; $i<$datadirNumber; $i++) {
 				}
 			];
 		}
-		
+
 		$TBNumber = $#$ary1 + 1;
 		print "\nNumber of tables in database: $TBNumber\n";
 		sleep(1);
 		my $tableName;
 		for ($j=0; $j<$TBNumber; $j++) {
 			$tableName = $ary1->[$j]{'event_table_name'};
-			if ($tableName ne "certificateRevocationTable") {
+			if ($tableName ne "certificateRevocationTable" and $tableName ne "queuePredictTable" and $tableName ne "QueueStatisticsDB") {
 				if ( grep( /^$tableName$/, @$tables )) {
 					print "\n***** $tableName found *****\n";
 					print "Processing table: $tableName: ";
 					my $stmt = "SELECT id, trigger_time, file_no, pic_offset_0, pic_len_0 from ".$tableName;
 					my $sth = $dbh->prepare($stmt) or die $DBI::errstr;
 					my $rv = $sth->execute();
-					
+
 					if($rv < 0) {
 					   print $DBI::errstr;
 					}
@@ -282,8 +348,8 @@ for ($i=0; $i<$datadirNumber; $i++) {
 
 					my $TBLength = $#$ary + 1;
 					print "$TBLength\n";
-					sleep(1);
-					
+					#sleep(1);
+
 					for ($k=0; $k<$TBLength; $k++) {
 						$fileNumber = $ary->[$k]{'file_no'};
 						$picFileName = "hiv" . sprintf("%05d", $fileNumber) . ".pic";
@@ -292,21 +358,20 @@ for ($i=0; $i<$datadirNumber; $i++) {
 						$capDate = $ary->[$k]{'trigger_time'};
 						$startOffset = $ary->[$k]{'pic_offset_0'};
 						$endOffset = $startOffset + ($ary->[$k]{'pic_len_0'});
-						$formatted_start_time = time2str("%C", $capDate, -0005);
+						$formatted_start_time = time2str("%Y-%m-%d_%H-%M-%S", $capDate // time, $client_tz);
 						if ($outputDateFormat == 1) {
-							$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
-							$fileDayofWeek = time2str("%a", $capDate, -0005);
+							$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate // time, $client_tz);
+							$fileDayofWeek = time2str("%a", $capDate // time, $client_tz);
 						}
 						elsif ($outputDateFormat == 2) {
-							$fileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
-							$fileDayofWeek = time2str("%w", $capDate, -0005);
+							$fileDate = time2str("%Y%m%d%H%M%S", $capDate // time, $client_tz);
+							$fileDayofWeek = time2str("%w", $capDate // time, $client_tz);
 						}
 						else {
-							$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
-							$fileDayofWeek = time2str("%a", $capDate, -0005);
+							$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate // time, $client_tz);
+							$fileDayofWeek = time2str("%a", $capDate // time, $client_tz);
 						}
-						$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
-										
+						$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate // time, $client_tz);
 						if ($inputStartDate != "" and $inputEndDate != "") {
 							if ($capDate > 0 and $limitFileDate >= $inputStartDate and $limitFileDate <= $inputEndDate) {
 								$jpegLength = ($endOffset - $startOffset);
@@ -337,7 +402,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 									}
 								}
 							}
-						} 
+						}
 						else {
 							if ($capDate > 0) {
 								$jpegLength = ($endOffset - $startOffset);
@@ -390,10 +455,10 @@ for ($i=0; $i<$datadirNumber; $i++) {
 		while (1) {
 			my $pic_segment_filename = sprintf("pic_segment_db_index%05d", $pic_segment_index);
 			my $pic_segment_filepath = $inputDir . "/" . $pic_segment_filename;
-			
+
 			if (-e $pic_segment_filepath) {
 				perform_extraction($pic_segment_filepath);
-			}   
+			}
 			else {
 				last;
 			}
@@ -401,7 +466,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 		}
 
 		sub perform_extraction {
-			my $driver = "SQLite"; 
+			my $driver = "SQLite";
 			my ($database) = @_;
 			print "Processing: $database\n\n";
 			my $dsn = "DBI:$driver:dbname=$database";
@@ -411,7 +476,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 			my $stmt = "SELECT start_time, start_offset, end_offset from "."pic_segment_idx_tb";
 			my $sth = $dbh->prepare($stmt) or die $DBI::errstr;
 			my $rv = $sth->execute();
-			
+
 			if($rv < 0) {
 				print $DBI::errstr;
 			}
@@ -420,7 +485,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 			my $TBLength = $#$ary + 1;
 			#print "$TBLength\n";
 			#sleep(2);
-			
+
 			for ($k=0; $k<$TBLength; $k++) {
 				$picFileName = "hiv" . sprintf("%05d", $pic_segment_index) . ".pic";
 				#print "$picFileName\n";
@@ -430,21 +495,21 @@ for ($i=0; $i<$datadirNumber; $i++) {
 				$capDate = $ary->[$k]{'start_time'};
 				$startOffset = $ary->[$k]{'start_offset'};
 				$endOffset = $ary->[$k]{'end_offset'};
-				$formatted_start_time = time2str("%C", $capDate, -0005);
+				$formatted_start_time = time2str("%Y-%m-%d_%H-%M-%S", $capDate // time, $client_tz);
 				if ($outputDateFormat == 1) {
-					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%a", $capDate, -0005);
+					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate // time, $client_tz);
+					$fileDayofWeek = time2str("%a", $capDate // time, $client_tz);
 				}
 				elsif ($outputDateFormat == 2) {
-					$fileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%w", $capDate, -0005);
+					$fileDate = time2str("%Y%m%d%H%M%S", $capDate // time, $client_tz);
+					$fileDayofWeek = time2str("%w", $capDate // time, $client_tz);
 				}
 				else {
-					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%a", $capDate, -0005);
+					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate // time, $client_tz);
+					$fileDayofWeek = time2str("%a", $capDate // time, $client_tz);
 				}
-				$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
-								
+				$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate // time, $client_tz);
+
 				if ($inputStartDate != "" and $inputEndDate != "") {
 					if ($capDate > 0 and $limitFileDate >= $inputStartDate and $limitFileDate <= $inputEndDate) {
 						$jpegLength = ($endOffset - $startOffset);
@@ -475,7 +540,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 							}
 						}
 					}
-				} 
+				}
 				else {
 					if ($capDate > 0) {
 						$jpegLength = ($endOffset - $startOffset);
@@ -514,8 +579,8 @@ for ($i=0; $i<$datadirNumber; $i++) {
 	print "Operation done for folder: $inputDir\n";
 	}
 
-	elsif ((-e $inputDir."/index00p.bin") or (-e $inputDir."/index01p.bin")) {	
-				
+	elsif ((-e $inputDir."/index00p.bin") or (-e $inputDir."/index01p.bin")) {
+
 		$maxRecords = 4096;
 		$recordSize = 80;
 
@@ -535,9 +600,9 @@ for ($i=0; $i<$datadirNumber; $i++) {
 				$Headcurrentpos = tell (FH);
 				read (FH,$Headbuffer,80); #Read 80 bytes for the record
 				#print "************$Headcurrentpos***************\n";
-						
+
 				($Headfield1, $Headfield2, $Headfield3, $Headfield4, $Headfield5, $Headfield6, $HeadcapDate, $Headfield8, $Headfield9, $Headfield10, $Headfield11, $Headfield12, $Headfield13, $Headfield14, $HeadstartOffset, $HeadendOffset) = unpack("I*",$Headbuffer);
-						
+
 				#print "$Headercurrentpos: $Headfield1, $Headfield2, $Headfield3, $Headfield4, $Headfield5, $Headfield6, $HeadcapDate, $Headfield8, $Headfield9, $Headfield10, $Headfield11, $Headfield12, $Headfield13, $Headfield14, $HeadstartOffset, $HeadendOffset\n";
 				if ($HeadcapDate > 0 and $Headfield8 == 0 and $Headfield9 > 0 and $Headfield10 == 0 and $Headfield11 == 0 and $Headfield12 == 0 and $Headfield13 == 0 and $Headfield14 == 0 and $HeadstartOffset > 0 and $HeadendOffset > 0)
 				{
@@ -547,7 +612,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 					sleep (3);
 				}
 		}
-		
+
 		for ($m=0; $m<$picFiles; $m++) {
 			my $LastCapDate = 0;
 			$newOffset = $headerSize + ($offset * $m);
@@ -556,33 +621,33 @@ for ($i=0; $i<$datadirNumber; $i++) {
 			print "PicFile: $picFileName at $newOffset\n";
 			open (PF, $inputDir . "/" . $picFileName) or die "ERROR: Can't find " . $picFileName . " in the input folder.\n";
 			binmode(PF);
-				
+
 			for ($n=0; $n<$maxRecords; $n++) {
 				$recordOffset = $newOffset + ($n * $recordSize); #get the next record location
 				seek (FH, $recordOffset, 0); #Use seek to make sure we are at the right location, 'read' was occasionally jumping a byte
 				$currentpos = tell (FH);
 				read (FH,$buffer,80); #Read 80 bytes for the record
 				#print "************$currentpos***************\n";
-						
+
 				($field1, $field2, $field3, $field4, $field5, $field6, $capDate, $field8, $field9, $field10, $field11, $field12, $field13, $field14, $startOffset, $endOffset) = unpack("I*",$buffer);
-				
-				$formatted_start_time = time2str("%C", $capDate, -0005);
+
+				$formatted_start_time = time2str("%Y-%m-%d_%H-%M-%S", $capDate // time, $client_tz);
 				if ($outputDateFormat == 1) {
-					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%a", $capDate, -0005);
+					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate // time, $client_tz);
+					$fileDayofWeek = time2str("%a", $capDate // time, $client_tz);
 				}
 				elsif ($outputDateFormat == 2) {
-					$fileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%w", $capDate, -0005);
+					$fileDate = time2str("%Y%m%d%H%M%S", $capDate // time, $client_tz);
+					$fileDayofWeek = time2str("%w", $capDate // time, $client_tz);
 				}
 				else {
-					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate, -0005);
-					$fileDayofWeek = time2str("%a", $capDate, -0005);
+					$fileDate = time2str("%Y_%m_%d-%H_%M_%S", $capDate // time, $client_tz);
+					$fileDayofWeek = time2str("%a", $capDate // time, $client_tz);
 				}
-				$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate, -0005);
-				
+				$limitFileDate = time2str("%Y%m%d%H%M%S", $capDate // time, $client_tz);
+
 				#print "$currentpos: $field1, $field2, $field3, $field4, $field5, $field6, $capDate, $field8, $field9, $field10, $field11, $field12, $field13, $field14, $startOffset, $endOffset\n";
-				
+
 				if ($inputStartDate != "" and $inputEndDate != "") {
 					if ($capDate > 0 and $capDate > $LastCapDate and $limitFileDate >= $inputStartDate and $limitFileDate <= $inputEndDate) {
 						$jpegLength = ($endOffset - $startOffset);
@@ -615,7 +680,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 						$LastCapDate = $capDate;
 						}
 					}
-				} 
+				}
 				else {
 					if ($capDate > 0 and $capDate > $LastCapDate) {
 						$jpegLength = ($endOffset - $startOffset);
@@ -654,7 +719,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 		}
 		close FH;
 	}
-	else {	
+	else {
 		die "\nERROR: Can't find event_db_index01 or pic_segment_db_index00000 or index00p.bin or index01p.bin in $inputDir\n";
 	}
 }
