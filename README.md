@@ -5,13 +5,13 @@ I recommend using Strawberry Perl from https://strawberryperl.com
 
 Perl Module Requirements:  
 Date::Format  
-File::Find::Rule  
+File::Spec  
 DBI
 
 The required modules should come bundled with Strawberry Perl, if not you can install them using the CPAN Client.
 If you are using Windows you can find the CPAN Client in the start menu. Start the CPAN Client and enter the following command:
 
-*install Date::Format File::Find::Rule DBI*
+*install Date::Format File::Spec DBI*
 
 ### **To run the script start CMD and enter:**
 
