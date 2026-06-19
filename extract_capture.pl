@@ -97,7 +97,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 }
 
 for ($i=0; $i<$datadirNumber; $i++) {
-	my $inputDir = $datadirArray[$i];
+	our $inputDir = $datadirArray[$i];
 	if ($useMainInputDir == 1) {
 		$inputDir = $mainInputDir;
 	}
@@ -391,7 +391,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 									if ($jpegLength > 0) {
 										seek (PF, $startOffset, 0);
 										read (PF, $singlejpeg, $jpegLength);
-										print "PicFile: $picFileName\n";
+										print "PicFile: $inputDir/$picFileName\n";
 										if ($singlejpeg =~ /[^\0]/) {
 											print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
 											open (OUTFILE, ">". $outputDir."/".$fileName);
@@ -422,7 +422,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 									if ($jpegLength > 0) {
 										seek (PF, $startOffset, 0);
 										read (PF, $singlejpeg, $jpegLength);
-										print "PicFile: $picFileName\n";
+										print "PicFile: $inputDir/$picFileName\n";
 										if ($singlejpeg =~ /[^\0]/) {
 											print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
 											open (OUTFILE, ">". $outputDir."/".$fileName);
@@ -488,7 +488,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 
 			for ($k=0; $k<$TBLength; $k++) {
 				$picFileName = "hiv" . sprintf("%05d", $pic_segment_index) . ".pic";
-				#print "$picFileName\n";
+				#print "$inputDir/$picFileName\n";
 				#sleep(2);
 				open (PF, $inputDir . "/" . $picFileName) or die "ERROR: Can't find " .$picFileName. " in the input folder.\n";
 				binmode(PF);
@@ -529,7 +529,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 							if ($jpegLength > 0) {
 								seek (PF, $startOffset, 0);
 								read (PF, $singlejpeg, $jpegLength);
-								print "PicFile: $picFileName\n";
+								print "PicFile: $inputDir/$picFileName\n";
 								if ($singlejpeg =~ /[^\0]/) {
 									print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
 									open (OUTFILE, ">". $outputDir."/".$fileName);
@@ -560,7 +560,7 @@ for ($i=0; $i<$datadirNumber; $i++) {
 							if ($jpegLength > 0) {
 								seek (PF, $startOffset, 0);
 								read (PF, $singlejpeg, $jpegLength);
-								print "PicFile: $picFileName\n";
+								print "PicFile: $inputDir/$picFileName\n";
 								if ($singlejpeg =~ /[^\0]/) {
 									print "POSITION (".($k+1)."): $formatted_start_time - OFFSET:($startOffset - $endOffset)\nFILE NAME: $fileName FILE SIZE: ". int($fileSize)." KB\n\n";
 									open (OUTFILE, ">". $outputDir."/".$fileName);
